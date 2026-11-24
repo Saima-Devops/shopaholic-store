@@ -65,6 +65,35 @@ export async function getOrdersForUser(userId: string) {
   });
 }
 
+/**
+ * Packshot, slug and colour for the pieces on a session that has no order
+ * row yet. Stripe's line items carry none of these, so the success page's
+ * "still confirming" state would otherwise show empty frames. Keyed by
+ * product id; a piece deleted since checkout is simply absent.
+ */
+export async function getProductPreviews(productIds: string[]) {
+  const previews = new Map<
+    string,
+    { slug: string; colour: string; image: string | null }
+  >();
+  if (productIds.length === 0) return previews;
+
+  const rows = await db.query.products.findMany({
+    where: inArray(products.id, productIds),
+    columns: { id: true, slug: true, colour: true },
+    with: { images: { orderBy: [asc(productImages.position)], limit: 1 } },
+  });
+
+  for (const row of rows) {
+    previews.set(row.id, {
+      slug: row.slug,
+      colour: row.colour,
+      image: row.images[0]?.url ?? null,
+    });
+  }
+  return previews;
+}
+
 /* Admin reads. Callers must have run `requireAdmin()`; these return every
    customer's orders. */
 

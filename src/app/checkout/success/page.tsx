@@ -12,7 +12,7 @@ import { PendingOrderRefresh } from "@/components/pending-order-refresh";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { formatCents } from "@/lib/format";
-import { getOrderByStripeSessionId } from "@/lib/orders";
+import { getOrderByStripeSessionId, getProductPreviews } from "@/lib/orders";
 import { requireUser } from "@/lib/session";
 import { stripe } from "@/lib/stripe";
 
@@ -76,8 +76,26 @@ export default async function CheckoutSuccessPage({
   const stripeLines = order
     ? []
     : await stripe.checkout.sessions
-        .listLineItems(sessionId, { limit: 100 })
+        // Expanding the product is how we get back the `product_id`
+        // checkout stored in its metadata.
+        .listLineItems(sessionId, {
+          limit: 100,
+          expand: ["data.price.product"],
+        })
         .autoPagingToArray({ limit: 1000 });
+
+  const productIdOf = (item: (typeof stripeLines)[number]): string | null => {
+    const product = item.price?.product;
+    return product && typeof product === "object" && !("deleted" in product)
+      ? (product.metadata?.product_id ?? null)
+      : null;
+  };
+
+  const previews = await getProductPreviews(
+    stripeLines
+      .map(productIdOf)
+      .filter((id): id is string => id !== null),
+  );
 
   /* One shape for both states. Before the webhook lands there is no order
      row, so the lines come from Stripe — which has no packshots, hence the
@@ -92,15 +110,20 @@ export default async function CheckoutSuccessPage({
         slug: item.productSlug || null,
         image: item.imageUrl ?? item.product?.images[0]?.url ?? null,
       }))
-    : stripeLines.map((item) => ({
-        key: item.id,
-        name: item.description ?? "Item",
-        colour: "",
-        quantity: item.quantity ?? 1,
-        totalCents: item.amount_total ?? 0,
-        slug: null,
-        image: null,
-      }));
+    : stripeLines.map((item) => {
+        const id = productIdOf(item);
+        const preview = id ? previews.get(id) : undefined;
+        return {
+          key: item.id,
+          name: item.description ?? "Item",
+          colour: preview?.colour ?? "",
+          quantity: item.quantity ?? 1,
+          // Still Stripe's amount: what was charged, not today's price.
+          totalCents: item.amount_total ?? 0,
+          slug: preview?.slug ?? null,
+          image: preview?.image ?? null,
+        };
+      });
 
   const totalCents = order?.totalCents ?? session.amount_total ?? 0;
 
