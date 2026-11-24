@@ -1,7 +1,7 @@
 import "server-only";
 
 import { headers } from "next/headers";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { cache } from "react";
 
 import { auth } from "@/lib/auth";
@@ -37,6 +37,22 @@ export async function requireUser(nextPath: string) {
   if (!user) {
     redirect(`/sign-in?next=${encodeURIComponent(nextPath)}`);
   }
+  return user;
+}
+
+/**
+ * The gate for everything under `/admin`. Call it first in **every** admin
+ * page and **every** admin Server Action. A layout check is not enough: it
+ * does not re-run on client navigation, and Server Actions are public POST
+ * endpoints that never pass through a layout.
+ *
+ * Signed out → sign-in. Signed in but not an admin → 404, so the admin area
+ * is not advertised. The role is read from the database on each request
+ * (no cookie cache), so a demotion takes effect immediately.
+ */
+export async function requireAdmin(nextPath: string) {
+  const user = await requireUser(nextPath);
+  if (user.role !== "admin") notFound();
   return user;
 }
 

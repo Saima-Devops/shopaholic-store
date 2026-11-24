@@ -99,7 +99,7 @@ export default async function ProductPage({
           {/* --- Information: sticky beside the gallery on desktop -------- */}
           <section
             aria-label="Product information"
-            className="stack-lg lg:sticky lg:top-32"
+            className="stack-lg lg:sticky lg:top-48"
           >
             <div className="stack-sm">
               <p className="type-caps text-ash">{product.category}</p>

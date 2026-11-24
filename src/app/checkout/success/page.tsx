@@ -59,9 +59,7 @@ export default async function CheckoutSuccessPage({
   }
 
   const user = await requireUser("/bag");
-  const session = await stripe.checkout.sessions.retrieve(sessionId, {
-    expand: ["line_items"],
-  });
+  const session = await stripe.checkout.sessions.retrieve(sessionId);
 
   // Authorisation. Without this, any signed-in person holding a session id
   // could read another customer's order, email and total.
@@ -72,6 +70,14 @@ export default async function CheckoutSuccessPage({
 
   const order = await getOrderByStripeSessionId(sessionId);
   const email = session.customer_details?.email ?? user.email;
+
+  // Only needed before the webhook lands. Listed, not expanded, so a big
+  // bag is not cut off at Stripe's first page.
+  const stripeLines = order
+    ? []
+    : await stripe.checkout.sessions
+        .listLineItems(sessionId, { limit: 100 })
+        .autoPagingToArray({ limit: 1000 });
 
   /* One shape for both states. Before the webhook lands there is no order
      row, so the lines come from Stripe — which has no packshots, hence the
@@ -86,7 +92,7 @@ export default async function CheckoutSuccessPage({
         slug: item.productSlug || null,
         image: item.imageUrl ?? item.product?.images[0]?.url ?? null,
       }))
-    : (session.line_items?.data ?? []).map((item) => ({
+    : stripeLines.map((item) => ({
         key: item.id,
         name: item.description ?? "Item",
         colour: "",
@@ -117,7 +123,7 @@ export default async function CheckoutSuccessPage({
         <div className="container-page section">
           <div className="grid gap-x-20 gap-y-16 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]">
             {/* Left: the statement, and everything a person asks next. */}
-            <section className="stack-lg lg:sticky lg:top-32 lg:self-start">
+            <section className="stack-lg lg:sticky lg:top-48 lg:self-start">
               <div className="stack-sm">
                 {order ? (
                   <p className="type-caps text-ash" data-numeric>

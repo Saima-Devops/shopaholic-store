@@ -18,6 +18,14 @@ export const user = pgTable("user", {
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").default(false).notNull(),
   image: text("image"),
+  /**
+   * Added by us, declared to Better Auth as an `additionalFields` entry with
+   * `input: false` in `src/lib/auth.ts`, so no sign-up or update-user call
+   * can set it. Granted only by `scripts/set-role.ts`.
+   */
+  role: text("role", { enum: ["customer", "admin"] })
+    .default("customer")
+    .notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -129,6 +137,10 @@ export const products = pgTable(
     madeToOrder: boolean("made_to_order").default(false).notNull(),
     /** Editorial line beside the stock state, e.g. "Three left in this colour". */
     stockDetail: text("stock_detail"),
+    /** Which edit a piece appears in: `unisex` shows on both /women and /men. */
+    audience: text("audience", { enum: ["women", "men", "unisex"] })
+      .default("unisex")
+      .notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -180,6 +192,12 @@ export const carts = pgTable("carts", {
     .notNull()
     .unique()
     .references(() => user.id, { onDelete: "cascade" }),
+  /**
+   * The Checkout Session currently open for this bag, if any. `startCheckout`
+   * expires it before creating a new one, so one bag can never have two
+   * payable sessions. Cleared by the webhook on success, failure or expiry.
+   */
+  checkoutSessionId: text("checkout_session_id"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
@@ -250,6 +268,17 @@ export const orders = pgTable(
     /** What Stripe reported it charged. Never recomputed from the lines. */
     totalCents: integer("total_cents").notNull(),
     currency: text("currency").default("usd").notNull(),
+    /**
+     * A row only exists once money was taken, so it starts at `paid`. Only
+     * `charge.refunded` moves it, always to absolute values read fresh from
+     * Stripe, so replayed or out-of-order events cannot corrupt it.
+     */
+    status: text("status", {
+      enum: ["paid", "partially_refunded", "refunded"],
+    })
+      .default("paid")
+      .notNull(),
+    refundedCents: integer("refunded_cents").default(0).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -257,6 +286,10 @@ export const orders = pgTable(
   (table) => [
     index("orders_user_id_idx").on(table.userId),
     index("orders_created_at_idx").on(table.createdAt.desc()),
+    /* Refund events carry a PaymentIntent, not a session. Nulls allowed. */
+    unique("orders_stripe_payment_intent_id_key").on(
+      table.stripePaymentIntentId,
+    ),
   ],
 );
 

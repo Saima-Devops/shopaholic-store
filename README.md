@@ -1,12 +1,8 @@
-<div align="center">
-  <br />
-    <a href="https://youtu.be/u2QqWkMv3Lg" target="_blank">
-      <img src="public/readme/readme-hero.webp" alt="Project Banner">
-    </a>
-  <br />
+  # Shopaholic - An Ecommerce Store
+  
+  <h3>Build a Luxury Brand Storefront with Claude Code</h3>
 
-  <div>
-
+<div>
 <img src="https://img.shields.io/badge/-Claude%20Code-D97706?style=for-the-badge&logo=anthropic&logoColor=white" />
 <img src="https://img.shields.io/badge/-Next.js-black?style=for-the-badge&logo=Next.js&logoColor=white" />
 <img src="https://img.shields.io/badge/-CodeRabbit-FF4500?style=for-the-badge&logo=coderabbit&logoColor=white" />
@@ -20,13 +16,7 @@
 
   </div>
 
-  <h3 align="center">Build a Luxury Brand Storefront with Claude Code</h3>
-
-   <div align="center">
-     Build this project step by step with our detailed tutorial on <a href="https://www.youtube.com/watch?v=XUkNR-JfHwo" target="_blank"><b>JavaScript Mastery</b></a> YouTube. Join the JSM family!
-    </div>
-</div>
-
+---
 ## 📋 <a name="table">Table of Contents</a>
 
 1. ✨ [Introduction](#introduction)
@@ -36,21 +26,13 @@
 5. 🔗 [Assets](#links)
 6. 🚀 [More](#more)
 
-## 🚨 Tutorial
-
-This repository contains the code corresponding to an in-depth tutorial available on our YouTube channel, <a href="https://www.youtube.com/@javascriptmastery/videos" target="_blank"><b>JavaScript Mastery</b></a>.
-
-If you prefer visual learning, this is the perfect resource for you. Follow our tutorial to learn how to build projects like these step-by-step in a beginner-friendly manner!
-
-<a href="https://youtu.be/u2QqWkMv3Lg" target="_blank"><img src="https://github.com/sujatagunale/EasyRead/assets/151519281/1736fca5-a031-4854-8c09-bc110e3bc16d" /></a>
+---
 
 ## <a name="introduction">✨ Introduction</a>
 
 A luxury e-commerce application built with Claude Code and PostgreSQL! Claude Code manages your codebase using CLAUDE.md project rules, Plan Mode for safe database migrations, and sandboxed permissions for security. Features a high-end luxury design system, custom reusable Skills, and parallel subagents tailored for developers who want to master real AI orchestration.
 
-If you're getting started and need assistance or face any bugs, join our active Discord community with over **50k+** members. It's a place where people help each other out.
-
-<a href="https://discord.com/invite/n6EdbFJ" target="_blank"><img src="https://github.com/sujatagunale/EasyRead/assets/151519281/618f4872-1e10-42da-8213-1d69e486d02e" /></a>
+---
 
 ## <a name="tech-stack">⚙️ Tech Stack</a>
 
@@ -72,7 +54,7 @@ If you're getting started and need assistance or face any bugs, join our active 
 
 - **[Tailwind CSS](https://tailwindcss.com/)** is a utility-first CSS framework designed for rapidly building custom user interfaces. Instead of providing pre-styled components, it offers low-level utility classes for layout, typography, color, and spacing directly within your markup, streamlining styling and enforcing consistent design systems.
 
-
+---
 ## <a name="features">🔋 Features</a>
 
 👉 **Landing Page**: A fast, engaging homepage for a luxury storefront that introduces your brand and products, serving as the starting point to learn how Claude Code reads and navigates your codebase.
@@ -89,6 +71,7 @@ If you're getting started and need assistance or face any bugs, join our active 
 
 And many more, including code architecture and reusability.
 
+---
 ## <a name="quick-start">🤸 Quick Start</a>
 
 Follow these steps to set up the project locally on your machine.
@@ -147,21 +130,3 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) in your browser to view the project.
 
-## <a name="links">🔗 Assets</a>
-
-Assets and snippets used in the project can be found in the **[video kit](https://jsm.dev/claude-kit)**.
-
-<a href="https://jsm.dev/claude-kit" target="_blank">
-  <img src="public/readme/readme-videokit.webp" alt="Video Kit Banner">
-</a>
-
-## <a name="more">🚀 More</a>
-
-**Advance your skills with Next.js Pro Course**
-
-Enjoyed creating this project? Dive deeper into our PRO courses for a richer learning adventure. They're packed with
-detailed explanations, cool features, and exercises to boost your skills. Give it a go!
-
-<a href="https://jsm.dev/claude-engineer" target="_blank">
-  <img src="public/readme/readme-jsmpro.webp" alt="Project Banner">
-</a>

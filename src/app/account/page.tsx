@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Suspense } from "react";
 
 import {
@@ -63,6 +64,13 @@ export default async function AccountPage() {
               </dd>
             </div>
           </dl>
+
+          {/* Convenience only — /admin checks the role itself. */}
+          {user.role === "admin" ? (
+            <Link href="/admin" className="btn btn-outline btn-block sm:min-w-56">
+              Admin
+            </Link>
+          ) : null}
 
           {/* A plain form, so signing out needs no JavaScript. */}
           <form action={signOutAction}>

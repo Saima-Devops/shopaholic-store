@@ -1,17 +1,19 @@
 import "server-only";
 
 import type { BatchItem } from "drizzle-orm/batch";
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lte } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
   cartItems,
+  carts,
   orderItems,
   orders,
   productImages,
   products,
 } from "@/db/schema";
+import { isUniqueViolation } from "@/lib/db-errors";
 import { stripe } from "@/lib/stripe";
 
 /**
@@ -29,17 +31,9 @@ import { stripe } from "@/lib/stripe";
  * makes that safe; the pre-check below is only the fast path.
  */
 
-/** Postgres unique_violation. */
-const UNIQUE_VIOLATION = "23505";
+/** Far above any real bag; a bound for `autoPagingToArray`. */
+const MAX_LINE_ITEMS = 1000;
 
-function isUniqueViolation(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    (error as { code?: unknown }).code === UNIQUE_VIOLATION
-  );
-}
 
 /**
  * The related product is pulled in only for its packshot, as a fallback for
@@ -71,6 +65,27 @@ export async function getOrdersForUser(userId: string) {
   });
 }
 
+/* Admin reads. Callers must have run `requireAdmin()`; these return every
+   customer's orders. */
+
+export async function listOrdersForAdmin(limit = 200) {
+  return db.query.orders.findMany({
+    orderBy: [desc(orders.createdAt)],
+    limit,
+    with: { items: { columns: { quantity: true } } },
+  });
+}
+
+export async function getOrderForAdmin(id: string) {
+  return db.query.orders.findFirst({
+    where: eq(orders.id, id),
+    with: {
+      user: { columns: { name: true, email: true } },
+      items: true,
+    },
+  });
+}
+
 export async function fulfillCheckoutSession(sessionId: string): Promise<void> {
   // Fast path for retries and for the second of the two success events.
   const existing = await db
@@ -81,9 +96,7 @@ export async function fulfillCheckoutSession(sessionId: string): Promise<void> {
 
   if (existing.length > 0) return;
 
-  const session = await stripe.checkout.sessions.retrieve(sessionId, {
-    expand: ["line_items", "line_items.data.price.product"],
-  });
+  const session = await stripe.checkout.sessions.retrieve(sessionId);
 
   // With delayed-notification methods, `completed` arrives while the session
   // is still unpaid. Fulfilling on that alone would ship for payments that
@@ -97,7 +110,14 @@ export async function fulfillCheckoutSession(sessionId: string): Promise<void> {
     return;
   }
 
-  const stripeLines = session.line_items?.data ?? [];
+  // Listed and paginated rather than expanded: an expanded `line_items`
+  // holds only the first page, which would silently drop lines from big bags.
+  const stripeLines = await stripe.checkout.sessions
+    .listLineItems(sessionId, {
+      limit: 100,
+      expand: ["data.price.product"],
+    })
+    .autoPagingToArray({ limit: MAX_LINE_ITEMS });
   if (stripeLines.length === 0) {
     console.warn("Stripe session has no line items", sessionId);
     return;
@@ -190,6 +210,49 @@ export async function fulfillCheckoutSession(sessionId: string): Promise<void> {
 
   const cartId = session.metadata?.cart_id;
 
+  /* Take only what was bought out of the bag. Deleting every line would also
+     remove pieces added in another tab after checkout started. A line whose
+     quantity was raised meanwhile keeps the difference. */
+  const purchased = new Map<string, number>();
+  for (const line of parsed) {
+    if (line.productId) {
+      purchased.set(
+        line.productId,
+        (purchased.get(line.productId) ?? 0) + line.quantity,
+      );
+    }
+  }
+
+  const bagCleanup = cartId
+    ? [
+        ...[...purchased].map(([productId, quantity]) =>
+          db
+            .update(cartItems)
+            .set({
+              quantity: sql`${cartItems.quantity} - ${quantity}`,
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(cartItems.cartId, cartId),
+                eq(cartItems.productId, productId),
+              ),
+            ),
+        ),
+        db
+          .delete(cartItems)
+          .where(and(eq(cartItems.cartId, cartId), lte(cartItems.quantity, 0))),
+        // Lets the customer start a new checkout, but only if this session
+        // is still the recorded one.
+        db
+          .update(carts)
+          .set({ checkoutSessionId: null })
+          .where(
+            and(eq(carts.id, cartId), eq(carts.checkoutSessionId, session.id)),
+          ),
+      ]
+    : [];
+
   // The Neon HTTP driver has no interactive transactions, so the order id is
   // generated above and every statement is known up front. Neon runs a batch
   // as one transaction, so a failure anywhere rolls all of it back.
@@ -209,9 +272,7 @@ export async function fulfillCheckoutSession(sessionId: string): Promise<void> {
     }),
     db.insert(orderItems).values(lines),
     ...decrements,
-    ...(cartId
-      ? [db.delete(cartItems).where(eq(cartItems.cartId, cartId))]
-      : []),
+    ...bagCleanup,
   ] as [BatchItem<"pg">, ...BatchItem<"pg">[]];
 
   try {
@@ -223,5 +284,61 @@ export async function fulfillCheckoutSession(sessionId: string): Promise<void> {
       return;
     }
     throw error;
+  }
+}
+
+/**
+ * A session that failed or expired can no longer be paid, so the bag may start
+ * a new checkout. No order row is written; the bag and stock stay as they are.
+ * Safe to replay: it only clears a pointer that still names this session.
+ */
+export async function releaseCheckoutSession(
+  sessionId: string,
+  cartId: string | undefined,
+): Promise<void> {
+  if (!cartId) return;
+
+  await db
+    .update(carts)
+    .set({ checkoutSessionId: null })
+    .where(and(eq(carts.id, cartId), eq(carts.checkoutSessionId, sessionId)));
+}
+
+/**
+ * Mirrors Stripe's refund total onto the order.
+ *
+ * The amounts are read fresh from Stripe, not from the event, and written as
+ * absolute values, so replays and out-of-order deliveries all end at the
+ * same row state.
+ */
+export async function applyRefund(paymentIntentId: string): Promise<void> {
+  const intent = await stripe.paymentIntents.retrieve(paymentIntentId, {
+    expand: ["latest_charge"],
+  });
+
+  const charge =
+    intent.latest_charge && typeof intent.latest_charge === "object"
+      ? intent.latest_charge
+      : null;
+  if (!charge) return;
+
+  const refundedCents = charge.amount_refunded;
+  const status =
+    refundedCents >= charge.amount
+      ? "refunded"
+      : refundedCents > 0
+        ? "partially_refunded"
+        : "paid";
+
+  const updated = await db
+    .update(orders)
+    .set({ refundedCents, status })
+    .where(eq(orders.stripePaymentIntentId, paymentIntentId))
+    .returning({ id: orders.id });
+
+  if (updated.length === 0 && intent.metadata?.user_id) {
+    // One of ours, but fulfillment has not written the order yet. Throwing
+    // makes the route answer 500, so Stripe retries later.
+    throw new Error(`No order yet for refunded payment ${paymentIntentId}`);
   }
 }

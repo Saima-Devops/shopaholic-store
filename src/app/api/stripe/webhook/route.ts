@@ -1,6 +1,10 @@
 import type Stripe from "stripe";
 
-import { fulfillCheckoutSession } from "@/lib/orders";
+import {
+  applyRefund,
+  fulfillCheckoutSession,
+  releaseCheckoutSession,
+} from "@/lib/orders";
 import { stripe, webhookSecret } from "@/lib/stripe";
 
 /**
@@ -48,14 +52,28 @@ export async function POST(request: Request) {
         break;
 
       case "checkout.session.async_payment_failed":
+      case "checkout.session.expired":
         // No row is written and the bag is left intact so the customer can
         // retry. Writing a failed order here would consume the unique on
         // stripe_checkout_session_id and make a later success for the same
-        // session look like a replay.
-        console.info(
-          "Checkout session payment failed",
+        // session look like a replay. Releasing only unblocks a new checkout.
+        console.info(event.type, event.data.object.id);
+        await releaseCheckoutSession(
           event.data.object.id,
+          event.data.object.metadata?.cart_id,
         );
+        break;
+
+      case "charge.refunded": {
+        const intent = event.data.object.payment_intent;
+        const intentId = typeof intent === "string" ? intent : intent?.id;
+        if (intentId) await applyRefund(intentId);
+        break;
+      }
+
+      case "charge.dispute.created":
+        // Not tracked on the order yet. Handle it in the Stripe Dashboard.
+        console.warn("Stripe dispute opened", event.data.object.id);
         break;
 
       default:

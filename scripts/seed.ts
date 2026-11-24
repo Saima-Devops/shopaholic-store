@@ -478,6 +478,21 @@ const categorySlugByName: Record<string, string> = {
   Jewellery: "jewellery",
 };
 
+/**
+ * Which edit each piece appears in. Anything not listed is `unisex`, which
+ * shows on both /women and /men.
+ */
+const audienceBySlug: Record<string, "women" | "men"> = {
+  "bordo-flap-bag": "women",
+  "giorno-backpack": "women",
+  "meridiana-shoulder-bag": "women",
+  "cordoni-silk-foulard": "women",
+  "catena-chain-necklace": "women",
+  "brillante-band": "women",
+  "riva-sunglasses": "women",
+  "cappotto-lungo": "women",
+};
+
 /** The old four-state enum, translated into a quantity and a flag. */
 const stockLevels: Record<StockState, { stockQuantity: number; madeToOrder: boolean }> = {
   in_stock: { stockQuantity: 12, madeToOrder: false },
@@ -545,6 +560,7 @@ async function seed() {
       stockQuantity: stock.stockQuantity,
       madeToOrder: stock.madeToOrder,
       stockDetail: product.stockDetail ?? null,
+      audience: audienceBySlug[product.slug] ?? "unisex",
       // Newest first, one day apart, so the original order survives.
       createdAt: new Date(BASE_DATE.getTime() - i * DAY),
     };

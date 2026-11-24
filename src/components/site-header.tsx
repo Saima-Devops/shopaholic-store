@@ -6,9 +6,10 @@ import { useEffect, useState, type ReactNode } from "react";
 import { primaryNav } from "@/lib/sample-data";
 
 /**
- * Centred wordmark, navigation split either side of it on desktop, drawer on
- * mobile. The header is sticky and gains a hairline only once the page has
- * scrolled, so it sits on the hero image without a seam.
+ * Wordmark on the page's centre line at every width. Desktop is two rows:
+ * search, wordmark, account and bag, then the catalogue nav centred beneath.
+ * Mobile is a drawer. The header is sticky and gains a hairline only once the
+ * page has scrolled, so it sits on the hero image without a seam.
  *
  * `account` and `bag` are slots rather than session reads of their own: this
  * stays a client component for the scroll hairline and the drawer, and pages
@@ -64,11 +65,10 @@ export function SiteHeader({
         Complimentary delivery and returns
       </p>
 
-      <div
-        className={`container-page relative flex items-center justify-between gap-4 py-5 lg:py-6 ${
-          scrolled ? "border-hairline border-b" : ""
-        }`}
-      >
+      <div className={scrolled ? "border-hairline border-b" : ""}>
+      {/* Row 1: the wordmark is absolutely centred at every width, so it sits
+          on the page's true centre line whatever the two sides hold. */}
+      <div className="container-page relative flex items-center justify-between gap-4 py-5 lg:py-6">
         {/* Mobile: drawer trigger */}
         <button
           type="button"
@@ -80,31 +80,23 @@ export function SiteHeader({
           Menu
         </button>
 
-        {/* Desktop: the catalogue lives to the left of the wordmark */}
-        <nav aria-label="Main" className="hidden lg:block">
-          <ul className="type-caps flex items-center gap-8">
-            {primaryNav.map((item) => (
-              <li key={item.label}>
-                <Link href={item.href} className="link-nav py-2">
-                  {item.label}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </nav>
+        {/* Desktop: search balances account and bag on the other side */}
+        <Link href="/search" className="type-caps link-nav hidden py-3 lg:block">
+          Search
+        </Link>
 
         <Link
           href="/"
-          className="type-wordmark absolute left-1/2 -translate-x-1/2 lg:static lg:left-auto lg:translate-x-0"
+          className="type-wordmark absolute left-1/2 -translate-x-1/2"
         >
           Shopaholic
         </Link>
 
         <ul className="type-caps -my-3 flex items-center gap-5 lg:gap-6">
-          <li className="hidden sm:block">
-            <a href="#" className="link-nav py-3">
+          <li className="hidden sm:block lg:hidden">
+            <Link href="/search" className="link-nav py-3">
               Search
-            </a>
+            </Link>
           </li>
           <li className="hidden sm:block">
             {account ?? (
@@ -121,6 +113,20 @@ export function SiteHeader({
             )}
           </li>
         </ul>
+      </div>
+
+      {/* Row 2, desktop only: the catalogue, centred under the wordmark */}
+      <nav aria-label="Main" className="container-page hidden pb-5 lg:block">
+        <ul className="type-caps flex flex-wrap items-center justify-center gap-x-8 gap-y-2">
+          {primaryNav.map((item) => (
+            <li key={item.label}>
+              <Link href={item.href} className="link-nav py-2">
+                {item.label}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </nav>
       </div>
 
       {/* Mobile drawer */}
@@ -155,9 +161,13 @@ export function SiteHeader({
           </ul>
           <ul className="type-caps stack rule-top mt-12 pt-8">
             <li>
-              <a href="#" className="text-ash inline-block py-1">
+              <Link
+                href="/search"
+                className="text-ash inline-block py-1"
+                onClick={() => setMenuOpen(false)}
+              >
                 Search
-              </a>
+              </Link>
             </li>
             <li>
               {account ?? (

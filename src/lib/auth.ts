@@ -55,5 +55,17 @@ export const auth = betterAuth({
   secret: requireAuthSecret(),
   baseURL: process.env.BETTER_AUTH_URL,
   emailAndPassword: { enabled: true },
+  user: {
+    additionalFields: {
+      /* `input: false` is the security boundary: without it, a sign-up
+         request could post `role: "admin"`. It still appears on
+         `session.user`, which is what `requireAdmin()` reads. */
+      role: {
+        type: "string",
+        defaultValue: "customer",
+        input: false,
+      },
+    },
+  },
   plugins: [nextCookies()],
 });

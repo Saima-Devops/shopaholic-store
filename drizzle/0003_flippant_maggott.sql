@@ -1,0 +1,1 @@
+ALTER TABLE "products" ADD COLUMN "audience" text DEFAULT 'unisex' NOT NULL;

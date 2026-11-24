@@ -3,9 +3,12 @@ import {
   count,
   desc,
   eq,
+  ilike,
   inArray,
   isNotNull,
+  lte,
   ne,
+  or,
   sql,
 } from "drizzle-orm";
 
@@ -243,4 +246,81 @@ export async function getCategoriesWithCounts(): Promise<CategorySummary[]> {
     alt: row.alt ?? "",
     pieceCount: row.pieceCount,
   }));
+}
+
+export type Audience = "women" | "men";
+
+/** The women's or men's edit, newest first. Unisex pieces appear in both. */
+export async function getProductsByAudience(
+  audience: Audience,
+  limit = 48,
+): Promise<Product[]> {
+  const rows = await db.query.products.findMany({
+    with: {
+      category: true,
+      images: { orderBy: [asc(productImages.position)] },
+    },
+    where: inArray(products.audience, [audience, "unisex"]),
+    orderBy: [desc(products.createdAt)],
+    limit,
+  });
+  return rows.map(mapProduct);
+}
+
+/** The gift edit's ceiling in dollars, like every amount components see. */
+export const GIFT_MAX_PRICE = 500;
+const GIFT_MAX_CENTS = GIFT_MAX_PRICE * 100;
+
+/** Pieces at or under the gift ceiling, lowest price first. */
+export async function getGiftEdit(limit = 48): Promise<Product[]> {
+  const rows = await db.query.products.findMany({
+    with: {
+      category: true,
+      images: { orderBy: [asc(productImages.position)] },
+    },
+    where: lte(products.priceCents, GIFT_MAX_CENTS),
+    orderBy: [asc(products.priceCents), desc(products.createdAt)],
+    limit,
+  });
+  return rows.map(mapProduct);
+}
+
+/** Longest query we pass to the database; anything past it is noise. */
+export const SEARCH_MAX_LENGTH = 100;
+
+/**
+ * Case-insensitive match on name, colour, description or category name.
+ * `%`, `_` and `\` are escaped so a visitor's input is matched literally
+ * rather than read as a LIKE pattern. The value itself is a bound parameter.
+ */
+export async function searchProducts(
+  query: string,
+  limit = 48,
+): Promise<Product[]> {
+  const term = query.trim().slice(0, SEARCH_MAX_LENGTH);
+  if (term.length === 0) return [];
+
+  const pattern = `%${term.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+
+  const rows = await db.query.products.findMany({
+    with: {
+      category: true,
+      images: { orderBy: [asc(productImages.position)] },
+    },
+    where: or(
+      ilike(products.name, pattern),
+      ilike(products.colour, pattern),
+      ilike(products.description, pattern),
+      inArray(
+        products.categoryId,
+        db
+          .select({ id: categories.id })
+          .from(categories)
+          .where(ilike(categories.name, pattern)),
+      ),
+    ),
+    orderBy: [desc(products.createdAt)],
+    limit,
+  });
+  return rows.map(mapProduct);
 }

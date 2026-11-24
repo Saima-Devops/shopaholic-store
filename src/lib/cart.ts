@@ -146,6 +146,30 @@ export async function removeItem(
     );
 }
 
+/** The Checkout Session currently open for this bag, if one was recorded. */
+export async function getCheckoutSessionId(
+  cartId: string,
+): Promise<string | null> {
+  const [row] = await db
+    .select({ id: carts.checkoutSessionId })
+    .from(carts)
+    .where(eq(carts.id, cartId))
+    .limit(1);
+
+  return row?.id ?? null;
+}
+
+/** Records the session `startCheckout` just created for this bag. */
+export async function setCheckoutSessionId(
+  cartId: string,
+  sessionId: string,
+): Promise<void> {
+  await db
+    .update(carts)
+    .set({ checkoutSessionId: sessionId, updatedAt: new Date() })
+    .where(eq(carts.id, cartId));
+}
+
 /**
  * What "Add to bag" needs to price and stock-check a piece: the id and cents
  * the mapped `Product` type deliberately withholds from components.
